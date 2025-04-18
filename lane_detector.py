@@ -275,34 +275,3 @@ class LaneDetector:
         self.frame_count += 1
         # Convert back to BGR for OpenCV compatibility
         return cv2.cvtColor(processed_frame, cv2.COLOR_RGB2BGR)
-
-def display_video_realtime(input_path):
-    detector = LaneDetector()
-    
-    # Open the input video
-    cap = cv2.VideoCapture(input_path)
-    if not cap.isOpened():
-        raise ValueError("Error opening video file")
-    
-    while cap.isOpened():
-        ret, frame = cap.read()
-        if not ret:
-            break
-        
-        # Process the frame
-        processed_frame = detector.process_image(frame)
-        
-        # Display the frame
-        cv2.imshow('Lane Detection', processed_frame)
-        
-        # Press 'q' to quit
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
-    
-    # Release everything
-    cap.release()
-    cv2.destroyAllWindows()
-
-if __name__ == "__main__":
-    # Process video and display in real-time
-    display_video_realtime("videos/car.mp4")

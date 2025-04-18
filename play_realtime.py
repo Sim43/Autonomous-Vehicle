@@ -1,6 +1,6 @@
 import cv2
 from camera import Camera
-from obj import ObjectDetector
+from obj_detector import ObjectDetector
 
 def main():
     camera = Camera(0)
