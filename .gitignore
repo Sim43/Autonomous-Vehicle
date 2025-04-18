@@ -1,0 +1,56 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+env/
+venv/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# VS Code settings
+.vscode/
+
+# macOS & Linux system files
+.DS_Store
+*.swp
+
+# Log and cache files
+*.log
+*.pot
+*.pyc
+*.pyo
+*.pyd
+*.cache/
+*.coverage
+
+
+# Pytest
+.cache/
+.pytest_cache/
+
+# Test results
+htmlcov/
+
+
+# Output folders
+build/
+dist/
+__pycache__/
+*.egg-info/
+
+
+# Ignore data files (optional)
+*.csv
+*.h5
+*.json
+
+# Ignore compiled code
+*.so
+
+# Ignore notebook export formats
+*.html
+*.pdf
