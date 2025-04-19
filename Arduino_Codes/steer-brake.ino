@@ -1,95 +1,117 @@
 #include <ESP32Servo.h>
 
 // Pin Definitions
-const int stepPin = 5;        // Stepper motor step pin (GPIO 5)
-const int dirPin = 18;         // Stepper motor direction pin (GPIO 4)
-const int servoPin = 13;      // Servo control pin (GPIO 13)
+const int stepPin = 5;
+const int dirPin = 18;
+const int servoPin = 13;
+
 // Constants
-const int stepsPerRevolution = 800;  // Full steps per revolution for stepper motor
-const int stepDelayMicroseconds = 400;  // Delay between steps for speed control
+const int stepsPerRevolution = 800;
+const int stepDelayMicroseconds = 400;
 
-// Objects
-Servo brakeServo;              // Servo object for braking/acceleration control
+// Servo
+Servo brakeServo;
 
+// Variables
+volatile int targetAngle = 0;
+volatile bool brakeCommand = false;
+volatile bool brakeEngaged = false;
+
+// Mutex for shared access
+SemaphoreHandle_t mutex;
 
 void setup() {
-  // Initialize Serial Communication
-  Serial.begin(115200);       // UART baud rate
-
-  // Set motor pins as outputs
+  Serial.begin(115200);
   pinMode(stepPin, OUTPUT);
   pinMode(dirPin, OUTPUT);
-
-  // Initialize servo
   brakeServo.attach(servoPin);
-  brakeServo.write(0);        // Start with the servo at 0 degrees (no brake)
+  brakeServo.write(0);
 
-  // Initialize stepper motor
-  digitalWrite(stepPin, LOW);
- 
-  Serial.println("ESP32 System Initialized. Use 'space', 'a', 'd' for control.");
+  mutex = xSemaphoreCreateMutex();
+
+  xTaskCreatePinnedToCore(steeringTask, "Steering Task", 2000, NULL, 1, NULL, 0);
+  xTaskCreatePinnedToCore(brakeTask, "Brake Task", 2000, NULL, 1, NULL, 1);
+
+  Serial.println("System Ready. Awaiting commands like 'S:<angle>' and 'B:1'");
 }
 
 void loop() {
-  // Check if UART data is available
-  if (Serial.available() > 0) {
-    char command = Serial.read();  // Read a single character command
+  if (Serial.available()) {
+    String input = Serial.readStringUntil('\n');
+    input.trim();
 
-    // Debugging - Print the received command
-    Serial.print("Received command: ");
-    Serial.println(command);
+    if (input.startsWith("S:")) {
+      int angle = input.substring(2).toInt();
 
-    // Perform actions based on commands
-    switch (command) {
-      case ' ':  // Brake
-        handleBrake();
-        break;
+      if (xSemaphoreTake(mutex, portMAX_DELAY)) {
+        targetAngle = constrain(angle, -360, 360); // Limit to safe bounds
+        xSemaphoreGive(mutex);
+      }
+    } else if (input.startsWith("B:")) {
+      int b = input.substring(2).toInt();
+      if (xSemaphoreTake(mutex, portMAX_DELAY)) {
+        brakeCommand = (b == 1);
+        xSemaphoreGive(mutex);
+      }
+    }
+  }
 
-      case 'a':  // Steer left
-        handleSteering(1);  // Left direction
-        break;
+  delay(10);
+}
 
-      case 'd':  // Steer right
-        handleSteering(0);  // Right direction
-        break;
+void steeringTask(void *pvParameters) {
+  int currentAngle = 0;
 
-      default:
-        Serial.println("Invalid command!");
-        break;
+  while (true) {
+    int angleToMove = 0;
+
+    if (xSemaphoreTake(mutex, portMAX_DELAY)) {
+      angleToMove = targetAngle - currentAngle;
+      xSemaphoreGive(mutex);
     }
 
-    delay(100); // Small delay for stability
+    if (angleToMove != 0) {
+      int direction = (angleToMove > 0) ? LOW : HIGH;
+      digitalWrite(dirPin, direction);
+
+      int steps = abs(angleToMove) * stepsPerRevolution / 360;
+
+      for (int i = 0; i < steps; i++) {
+        digitalWrite(stepPin, HIGH);
+        delayMicroseconds(stepDelayMicroseconds);
+        digitalWrite(stepPin, LOW);
+        delayMicroseconds(stepDelayMicroseconds);
+      }
+
+      if (xSemaphoreTake(mutex, portMAX_DELAY)) {
+        currentAngle += angleToMove;
+        xSemaphoreGive(mutex);
+      }
+    }
+
+    vTaskDelay(10 / portTICK_PERIOD_MS);
   }
 }
 
-// Function to handle braking using servo
-void handleBrake() {
-  Serial.println("Braking...");
-  brakeServo.write(180);  // Apply brake (servo to 180 degrees)
-  delay(500);             // Small delay to simulate braking
-  brakeServo.write(0);    // Release brake (servo to 0 degrees)
-}
+void brakeTask(void *pvParameters) {
+  while (true) {
+    bool applyBrake = false;
 
-// Function to handle steering using stepper motor
-void handleSteering(int direction) {
-  if (direction == 1) {
-    Serial.println("Steering left...");
-    digitalWrite(dirPin, HIGH); // Set direction to left
-  } else if (direction == 0) {
-    Serial.println("Steering right...");
-    digitalWrite(dirPin, LOW);  // Set direction to right
-  }
+    if (xSemaphoreTake(mutex, portMAX_DELAY)) {
+      applyBrake = brakeCommand;
+      xSemaphoreGive(mutex);
+    }
 
-  makeStepsSteering(stepsPerRevolution / 4); // Use steering-specific steps
-}
+    if (applyBrake && !brakeEngaged) {
+      Serial.println("Brake Engaged");
+      brakeServo.write(180);
+      brakeEngaged = true;
+    } else if (!applyBrake && brakeEngaged) {
+      Serial.println("Brake Released");
+      brakeServo.write(0);
+      brakeEngaged = false;
+    }
 
-// Function to make steps for Steering
-void makeStepsSteering(int steps) {
-  Serial.println("Executing Steering steps...");
-  for (int x = 0; x < steps; x++) {
-    digitalWrite(stepPin, HIGH);
-    delayMicroseconds(stepDelayMicroseconds);
-    digitalWrite(stepPin, LOW);
-    delayMicroseconds(stepDelayMicroseconds);
+    vTaskDelay(100 / portTICK_PERIOD_MS);
   }
 }
