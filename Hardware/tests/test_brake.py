@@ -2,7 +2,7 @@
 import serial
 import time
 
-ser = serial.Serial('COM3', 115200)  # Change COM port
+ser = serial.Serial('/dev/ttyUSB0', 115200)  # Change COM port
 time.sleep(2)
 
 commands = ['1', '0', '1', '0']

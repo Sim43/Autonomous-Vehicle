@@ -1,0 +1,10 @@
+- Connect esp32 to usb port one at a time. 
+- Command: udevadm info -a -n /dev/ttyUSB0
+- Extract idVendor and ifProduct from that text, or give it to ChatGPT and it will find it. 
+- Command: sudo nano /etc/udev/rules.d/99-usb-serial.rules
+- Paste the following line: SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="7523", SYMLINK+="my_usb_device"
+  (Note: You have to put your own idVendor, idProduct and my_usb_device) (my_usb_device is the name set yourself)
+- Save and exit.
+- Command: sudo udevadm control --reload-rules
+- Command: sudo udevadm trigger
+Done

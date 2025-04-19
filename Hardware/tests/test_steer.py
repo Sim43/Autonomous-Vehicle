@@ -1,8 +1,8 @@
-# test_steering.py
+# test_steer.py
 import serial
 import time
 
-ser = serial.Serial('/dev/ttyUSB0', 115200)  # Change COM port as needed
+ser = serial.Serial('/dev/steer', 115200)  # Change COM port as needed
 time.sleep(2)  # Wait for connection
 
 angles = [1800, -1800, 0]
