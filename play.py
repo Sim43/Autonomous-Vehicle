@@ -11,8 +11,7 @@ def draw_detections(frame, detections):
         cv2.putText(frame, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
     return frame
 
-def main(source=0):  # 0 = webcam, or provide path to video
-    # Initialize detectors
+def main(source):
     lane_detector = LaneDetector()
     object_detector = ObjectDetector()
 
@@ -27,18 +26,15 @@ def main(source=0):  # 0 = webcam, or provide path to video
         if not ret:
             break
 
-        # Lane Detection
         try:
             frame_with_lanes = lane_detector.process_image(frame)
         except AssertionError as e:
             print("Lane detection skipped:", e)
             frame_with_lanes = frame
 
-        # Object Detection
         detections = object_detector.detect_objects(frame)
         frame_with_all = draw_detections(frame_with_lanes, detections)
 
-        # Show output
         cv2.imshow("Lane + Object Detection", frame_with_all)
         key = cv2.waitKey(1)
         if key == 27 or key == ord('q'):
@@ -48,9 +44,15 @@ def main(source=0):  # 0 = webcam, or provide path to video
     cv2.destroyAllWindows()
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Lane and Object Detection")
-    parser.add_argument('--video', type=str, help="Path to video file (default: webcam)", default=None)
+    parser = argparse.ArgumentParser(description="Lane and Object Detection System")
+    parser.add_argument('--video', type=str, help="Path to video file (overrides camera)", default=None)
+    parser.add_argument('--camera-index', type=int, help="Camera index to use (e.g., 0 for default, 1 for USB camera)", default=0)
+
     args = parser.parse_args()
-    
-    video_source = args.video if args.video else 0
-    main(video_source)
+
+    if args.video:
+        source = args.video
+    else:
+        source = args.camera_index
+
+    main(source)
