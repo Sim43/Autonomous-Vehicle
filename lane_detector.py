@@ -9,8 +9,6 @@ class LaneDetector:
         self.frame_count = 0
         self.left_fit_prev = None
         self.right_fit_prev = None
-        self.curve_radius = 0
-        self.offset = 0
         
         # Load camera calibration
         self.camera = pickle.load(open("models/camera_matrix.pkl", "rb"))
@@ -61,12 +59,6 @@ class LaneDetector:
         S = hls_img[:,:,2]
         binary_output = np.zeros_like(S)
         binary_output[(S >= sthresh[0]) & (S <= sthresh[1]) & (L > lthresh[0]) & (L <= lthresh[1])] = 1
-        return binary_output
-    
-    def red_select(self, img, thresh=(0, 255)):
-        R = img[:,:,0]
-        binary_output = np.zeros_like(R)
-        binary_output[(R > thresh[0]) & (R <= thresh[1])] = 1
         return binary_output
     
     def binary_pipeline(self, img):
