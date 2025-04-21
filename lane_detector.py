@@ -205,37 +205,6 @@ class LaneDetector:
         result = cv2.addWeighted(undist, 1, newwarp, 0.3, 0)
         return result
     
-    def measure_curve(self, binary_warped, left_fit, right_fit):
-        ploty = np.linspace(0, binary_warped.shape[0]-1, binary_warped.shape[0])
-        y_eval = np.max(ploty)
-        
-        ym_per_pix = 30/720
-        xm_per_pix = 3.7/700
-        
-        leftx = self.get_val(ploty, left_fit)
-        rightx = self.get_val(ploty, right_fit)
-        
-        left_fit_cr = np.polyfit(ploty*ym_per_pix, leftx*xm_per_pix, 2)
-        right_fit_cr = np.polyfit(ploty*ym_per_pix, rightx*xm_per_pix, 2)
-        
-        left_curverad = ((1 + (2*left_fit_cr[0]*y_eval*ym_per_pix + left_fit_cr[1])**2)**1.5) / np.absolute(2*left_fit_cr[0])
-        right_curverad = ((1 + (2*right_fit_cr[0]*y_eval*ym_per_pix + right_fit_cr[1])**2)**1.5) / np.absolute(2*right_fit_cr[0])
-        
-        curve_rad = round((left_curverad + right_curverad)/2)
-        return curve_rad
-    
-    def vehicle_offset(self, img, left_fit, right_fit):
-        xm_per_pix = 3.7/700
-        image_center = img.shape[1]/2
-        
-        left_low = self.get_val(img.shape[0], left_fit)
-        right_low = self.get_val(img.shape[0], right_fit)
-        
-        lane_center = (left_low + right_low)/2.0
-        distance = image_center - lane_center
-        
-        return round(distance*xm_per_pix, 5)
-    
     def process_image(self, img):
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         undist = self.distort_correct(img)
@@ -259,18 +228,6 @@ class LaneDetector:
         
         # Draw polygon
         processed_frame = self.lane_fill_poly(birdseye, undist, left_fit, right_fit)
-        
-        # Update measurements periodically
-        if self.frame_count == 0 or self.frame_count % 15 == 0:
-            self.curve_radius = self.measure_curve(birdseye, left_fit, right_fit)
-            self.offset = self.vehicle_offset(undist, left_fit, right_fit)
-        
-        # Add text to frame
-        font = cv2.FONT_HERSHEY_TRIPLEX
-        processed_frame = cv2.putText(processed_frame, f'Radius: {self.curve_radius} m', 
-                                     (30, 40), font, 1, (0,255,0), 2)
-        processed_frame = cv2.putText(processed_frame, f'Offset: {self.offset} m', 
-                                     (30, 80), font, 1, (0,255,0), 2)
         
         self.frame_count += 1
         # Convert back to BGR for OpenCV compatibility
