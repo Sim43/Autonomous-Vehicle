@@ -1,4 +1,7 @@
 from ultralytics import YOLO
+import logging
+
+logging.getLogger('ultralytics').setLevel(logging.WARNING)
 
 class ObjectDetector:
     def __init__(self):

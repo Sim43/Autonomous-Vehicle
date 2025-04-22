@@ -9,6 +9,8 @@ class LaneDetector:
         self.frame_count = 0
         self.left_fit_prev = None
         self.right_fit_prev = None
+        self.curve_radius = 0
+        self.offset = 0
         
         # Load camera calibration
         self.camera = pickle.load(open("models/camera_matrix.pkl", "rb"))
@@ -98,6 +100,19 @@ class LaneDetector:
         warped_img = cv2.warpPerspective(img, perspective_transform, image_size, flags=cv2.INTER_LINEAR)
         
         return warped_img, inverse_perspective_transform
+    
+    def has_lanes(self, binary_warped, threshold=0.01):
+        """Check if there are potential lane lines in the image by analyzing the bottom half"""
+        # Analyze the bottom half of the image where lanes are most likely to be
+        bottom_half = binary_warped[binary_warped.shape[0]//2:, :]
+        
+        # Calculate the percentage of white pixels
+        white_pixels = np.sum(bottom_half == 1)
+        total_pixels = bottom_half.shape[0] * bottom_half.shape[1]
+        white_ratio = white_pixels / total_pixels
+        
+        # If the ratio is too low, there are probably no lanes
+        return white_ratio > threshold
     
     def track_lanes_initialize(self, binary_warped):
         histogram = np.sum(binary_warped[int(binary_warped.shape[0]/2):,:], axis=0)
@@ -231,11 +246,21 @@ class LaneDetector:
     def process_image(self, img):
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         undist = self.distort_correct(img)
+        
         # Get binary image
         binary_img = self.binary_pipeline(undist)
+        
         # Perspective transform
         birdseye, self.inverse_perspective_transform = self.warp_image(binary_img)
         
+        # Check if lanes are present before processing
+        if not self.has_lanes(birdseye):
+            # No lanes detected, return original image with warning
+            font = cv2.FONT_HERSHEY_TRIPLEX
+            undist = cv2.putText(undist, 'No lanes detected', (30, 40), font, 1, (0,0,255), 2)
+            return cv2.cvtColor(undist, cv2.COLOR_RGB2BGR), 0, 0
+        
+        # Proceed with lane detection if lanes are present
         if self.window_search:
             self.window_search = False
             left_fit, right_fit = self.track_lanes_initialize(birdseye)
