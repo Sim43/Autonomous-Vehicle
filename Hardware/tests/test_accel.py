@@ -3,7 +3,7 @@ import serial
 import time
 
 # Replace 'COMX' with your actual port. On Linux use something like '/dev/ttyUSB0'
-ser = serial.Serial('/dev/accel', 115200, timeout=1)
+ser = serial.Serial('/dev/ttyUSB3', 115200, timeout=1)
 time.sleep(2)  # Give some time for ESP32 to reset
 
 try:
