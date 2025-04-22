@@ -27,7 +27,7 @@ def main(source):
             break
 
         try:
-            frame_with_lanes = lane_detector.process_image(frame)
+            frame_with_lanes, curve_radius, offset = lane_detector.process_image(frame)
         except AssertionError as e:
             print("Lane detection skipped:", e)
             frame_with_lanes = frame
