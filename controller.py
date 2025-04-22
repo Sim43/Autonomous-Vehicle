@@ -69,15 +69,19 @@ class ESPController:
     
     def set_acceleration(self, active):
         """Enable or disable acceleration"""
-        if active and not self.brake_active:  # Can't accelerate while braking
-            self.accel_active = active
+        if active:
+            self.accel_active = True
             self.brake_active = False
-    
+        else:
+            self.accel_active = False
+
     def set_brake(self, active):
         """Enable or disable braking"""
-        if active and not self.accel_active:  # Can't brake while accelerating
-            self.brake_active = active
+        if active:
+            self.brake_active = True
             self.accel_active = False
+        else:
+            self.brake_active = False
     
     def _accel_control_loop(self):
         while self.running:
