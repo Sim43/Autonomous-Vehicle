@@ -1,15 +1,22 @@
 from ultralytics import YOLO
+import torch
 import logging
 
-logging.getLogger('ultralytics').setLevel(logging.WARNING)
+# Suppress all YOLO-related logging
+logging.getLogger('ultralytics').setLevel(logging.CRITICAL)
 
 class ObjectDetector:
     def __init__(self):
+        # Automatically select GPU if available
+        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        print(f"[INFO] Using device: {self.device.upper()}")
+
         self.model = YOLO('models/yolov8n.pt')
+        self.model.to(self.device)
         self.classes_of_interest = ['car', 'person', 'stop sign']
     
     def detect_objects(self, frame):
-        results = self.model(frame)
+        results = self.model(frame, device=self.device)
         detections = []
         
         for result in results:
