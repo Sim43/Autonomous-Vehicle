@@ -27,7 +27,7 @@ def find_available_camera(max_index=10):
             return index
     return None
 
-def main(source, use_esp):
+def main(source, use_esp, debug):
     lane_detector = LaneDetector()
     object_detector = ObjectDetector()
     pid = PIDController(Kp=500, Ki=0.1, Kd=100)
@@ -46,7 +46,10 @@ def main(source, use_esp):
                 break
 
             try:
-                frame_with_lanes, offset = lane_detector.process_image(frame)
+                if debug:
+                    frame_with_lanes, offset = lane_detector.process_image(frame, debug)
+                else: 
+                    offset = lane_detector.process_image(frame, debug)
             except AssertionError as e:
                 print("Lane detection skipped:", e)
                 frame_with_lanes = frame
@@ -59,11 +62,10 @@ def main(source, use_esp):
                 esp_controller.set_steering(steering_angle)
 
             detections = object_detector.detect_objects(frame)
-            frame_with_all = draw_detections(frame_with_lanes, detections)
-
-            object_too_close = any(det['distance'] < 2.0 for det in detections)
 
             accel = True
+            object_too_close = any(det['distance'] < 2.0 for det in detections)
+
             if use_esp:
                 if object_too_close:
                     accel = False
@@ -73,16 +75,18 @@ def main(source, use_esp):
                     esp_controller.set_acceleration(True)
                     esp_controller.set_brake(False)
 
+            if debug:
+                frame_with_all = draw_detections(frame_with_lanes, detections)
                 frame_with_all = draw_driving_info(frame_with_all, steering_angle, accel)
-
-            cv2.imshow("Lane + Object Detection", frame_with_all)
-            key = cv2.waitKey(1)
-            if key == 27 or key == ord('q'):
-                break
+                cv2.imshow("Lane + Object Detection", frame_with_all)
+                key = cv2.waitKey(1)
+                if key == 27 or key == ord('q'):
+                    break
 
     finally:
         cap.release()
-        cv2.destroyAllWindows()
+        if debug:
+            cv2.destroyAllWindows()
         if use_esp and esp_controller:
             esp_controller.shutdown()
 
@@ -90,6 +94,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Lane and Object Detection System")
     parser.add_argument('--video', type=str, help="Path to video file (overrides camera)", default=None)
     parser.add_argument('--use-esp', action='store_true', help="Enable ESP controller for sending commands")
+    parser.add_argument('--debug', action='store_true', help="Enable debug mode with drawing and display")
     args = parser.parse_args()
 
     source = args.video if args.video else find_available_camera()
@@ -97,4 +102,4 @@ if __name__ == "__main__":
         print("No available camera found.")
         exit(1)
 
-    main(source, use_esp=args.use_esp)
+    main(source, use_esp=args.use_esp, debug=args.debug)
