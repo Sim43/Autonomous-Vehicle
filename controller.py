@@ -46,19 +46,19 @@ class ESPController:
     
     def _initialize_connections(self):
         try:
-            self.accel_serial = serial.Serial('/dev/accel', 115200, timeout=1)
+            self.accel_serial = serial.Serial('/dev/ttyUSB3', 115200, timeout=1)
             time.sleep(2)
         except Exception as e:
             print(f"Failed to initialize acceleration ESP: {e}")
         
         try:
-            self.steer_serial = serial.Serial('/dev/steer', 115200, timeout=1)
+            self.steer_serial = serial.Serial('/dev/ttyUSB0', 115200, timeout=1)
             time.sleep(2)
         except Exception as e:
             print(f"Failed to initialize steering ESP: {e}")
         
         try:
-            self.brake_serial = serial.Serial('/dev/brake', 115200, timeout=1)
+            self.brake_serial = serial.Serial('/dev/ttyUSB1', 115200, timeout=1)
             time.sleep(2)
         except Exception as e:
             print(f"Failed to initialize brake ESP: {e}")
