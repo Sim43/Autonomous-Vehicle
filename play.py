@@ -20,7 +20,7 @@ def draw_driving_info(frame, steering_angle, accel):
     return frame
 
 def find_available_camera(max_index=10):
-    for index in range(1, max_index):
+    for index in range(0, max_index):
         cap = cv2.VideoCapture(index)
         if cap.isOpened():
             cap.release()
@@ -46,14 +46,14 @@ def main(source, use_esp):
                 break
 
             try:
-                frame_with_lanes, curve_radius, offset = lane_detector.process_image(frame)
+                frame_with_lanes, offset = lane_detector.process_image(frame)
             except AssertionError as e:
                 print("Lane detection skipped:", e)
                 frame_with_lanes = frame
                 offset = 0
 
             steering_angle = pid.compute(offset)
-            steering_angle = max(min(steering_angle, 1800), -1800)
+            steering_angle = int(max(min(steering_angle, 1800), -1800))
 
             if use_esp:
                 esp_controller.set_steering(steering_angle)
@@ -73,7 +73,7 @@ def main(source, use_esp):
                     esp_controller.set_acceleration(True)
                     esp_controller.set_brake(False)
 
-            frame_with_all = draw_driving_info(frame_with_all, steering_angle, accel)
+                frame_with_all = draw_driving_info(frame_with_all, steering_angle, accel)
 
             cv2.imshow("Lane + Object Detection", frame_with_all)
             key = cv2.waitKey(1)

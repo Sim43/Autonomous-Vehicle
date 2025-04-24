@@ -101,19 +101,6 @@ class LaneDetector:
         
         return warped_img, inverse_perspective_transform
     
-    def has_lanes(self, binary_warped, threshold=0.01):
-        """Check if there are potential lane lines in the image by analyzing the bottom half"""
-        # Analyze the bottom half of the image where lanes are most likely to be
-        bottom_half = binary_warped[binary_warped.shape[0]//2:, :]
-        
-        # Calculate the percentage of white pixels
-        white_pixels = np.sum(bottom_half == 1)
-        total_pixels = bottom_half.shape[0] * bottom_half.shape[1]
-        white_ratio = white_pixels / total_pixels
-        
-        # If the ratio is too low, there are probably no lanes
-        return white_ratio > threshold
-    
     def track_lanes_initialize(self, binary_warped):
         histogram = np.sum(binary_warped[int(binary_warped.shape[0]/2):,:], axis=0)
         midpoint = int(histogram.shape[0]/2)
@@ -212,25 +199,6 @@ class LaneDetector:
         result = cv2.addWeighted(undist, 1, newwarp, 0.3, 0)
         return result
     
-    def measure_curve(self, binary_warped, left_fit, right_fit):
-        ploty = np.linspace(0, binary_warped.shape[0]-1, binary_warped.shape[0])
-        y_eval = np.max(ploty)
-        
-        ym_per_pix = 30/720
-        xm_per_pix = 3.7/700
-        
-        leftx = self.get_val(ploty, left_fit)
-        rightx = self.get_val(ploty, right_fit)
-        
-        left_fit_cr = np.polyfit(ploty*ym_per_pix, leftx*xm_per_pix, 2)
-        right_fit_cr = np.polyfit(ploty*ym_per_pix, rightx*xm_per_pix, 2)
-        
-        left_curverad = ((1 + (2*left_fit_cr[0]*y_eval*ym_per_pix + left_fit_cr[1])**2)**1.5) / np.absolute(2*left_fit_cr[0])
-        right_curverad = ((1 + (2*right_fit_cr[0]*y_eval*ym_per_pix + right_fit_cr[1])**2)**1.5) / np.absolute(2*right_fit_cr[0])
-        
-        curve_rad = round((left_curverad + right_curverad)/2)
-        return curve_rad
-    
     def vehicle_offset(self, img, left_fit, right_fit):
         xm_per_pix = 3.7/700
         image_center = img.shape[1]/2
@@ -246,21 +214,11 @@ class LaneDetector:
     def process_image(self, img):
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         undist = self.distort_correct(img)
-        
         # Get binary image
         binary_img = self.binary_pipeline(undist)
-        
         # Perspective transform
         birdseye, self.inverse_perspective_transform = self.warp_image(binary_img)
         
-        # Check if lanes are present before processing
-        if not self.has_lanes(birdseye):
-            # No lanes detected, return original image with warning
-            font = cv2.FONT_HERSHEY_TRIPLEX
-            undist = cv2.putText(undist, 'No lanes detected', (30, 40), font, 1, (0,0,255), 2)
-            return cv2.cvtColor(undist, cv2.COLOR_RGB2BGR), 0, 0
-        
-        # Proceed with lane detection if lanes are present
         if self.window_search:
             self.window_search = False
             left_fit, right_fit = self.track_lanes_initialize(birdseye)
@@ -276,19 +234,11 @@ class LaneDetector:
         
         # Draw polygon
         processed_frame = self.lane_fill_poly(birdseye, undist, left_fit, right_fit)
-
+        
         # Update measurements periodically
         if self.frame_count == 0 or self.frame_count % 15 == 0:
-            self.curve_radius = self.measure_curve(birdseye, left_fit, right_fit)
             self.offset = self.vehicle_offset(undist, left_fit, right_fit)
-        
-        # Add text to frame
-        font = cv2.FONT_HERSHEY_TRIPLEX
-        processed_frame = cv2.putText(processed_frame, f'Radius: {self.curve_radius} m', 
-                                     (30, 40), font, 1, (0,255,0), 2)
-        processed_frame = cv2.putText(processed_frame, f'Offset: {self.offset} m', 
-                                     (30, 80), font, 1, (0,255,0), 2)
         
         self.frame_count += 1
         # Convert back to BGR for OpenCV compatibility
-        return cv2.cvtColor(processed_frame, cv2.COLOR_RGB2BGR), self.curve_radius, self.offset
+        return cv2.cvtColor(processed_frame, cv2.COLOR_RGB2BGR), self.offset
