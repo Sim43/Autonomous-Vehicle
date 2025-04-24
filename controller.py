@@ -82,6 +82,7 @@ class ESPController:
     def shutdown(self):
         self.set_acceleration(False)
         self.set_brake(False)
+        self.set_steering(0)
 
         if self.accel_serial:
             self.accel_serial.close()
