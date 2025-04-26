@@ -8,6 +8,7 @@ void setup() {
   Serial.begin(115200);  // Match baud rate with your Python script
   pinMode(stepPin, OUTPUT);
   pinMode(dirPin, OUTPUT);
+  Serial.println("STEERING_MODULE");
 }
 
 void moveToAngle(int targetAngle) {

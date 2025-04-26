@@ -4,7 +4,7 @@ const int motorPin = 23;  // PWM pin connected to motor
 void setup() {
   Serial.begin(115200);
   pinMode(motorPin, OUTPUT); // Set motor pin as an output
-  Serial.println("Send 1 to start motor, 0 to stop motor.");
+  Serial.println("ACCELERATION_MODULE");
 }
 
 void loop() {

@@ -27,7 +27,7 @@ def find_available_camera(max_index=10):
             return index
     return None
 
-def main(source, use_esp, debug):
+def main(source, use_esp):
     lane_detector = LaneDetector()
     object_detector = ObjectDetector()
     pid = PIDController(Kp=500, Ki=0.1, Kd=100)
@@ -46,10 +46,7 @@ def main(source, use_esp, debug):
                 break
 
             try:
-                if debug:
-                    frame_with_lanes, offset = lane_detector.process_image(frame, debug)
-                else: 
-                    offset = lane_detector.process_image(frame, debug)
+                frame_with_lanes, offset = lane_detector.process_image(frame)
             except AssertionError as e:
                 print("Lane detection skipped:", e)
                 frame_with_lanes = frame
@@ -75,18 +72,16 @@ def main(source, use_esp, debug):
                     esp_controller.set_acceleration(True)
                     esp_controller.set_brake(False)
 
-            if debug:
-                frame_with_all = draw_detections(frame_with_lanes, detections)
-                frame_with_all = draw_driving_info(frame_with_all, steering_angle, accel)
-                cv2.imshow("Lane + Object Detection", frame_with_all)
-                key = cv2.waitKey(1)
-                if key == 27 or key == ord('q'):
-                    break
+            frame_with_all = draw_detections(frame_with_lanes, detections)
+            frame_with_all = draw_driving_info(frame_with_all, steering_angle, accel)
+            cv2.imshow("Lane + Object Detection", frame_with_all)
+            key = cv2.waitKey(1)
+            if key == 27 or key == ord('q'):
+                break
 
     finally:
         cap.release()
-        if debug:
-            cv2.destroyAllWindows()
+        cv2.destroyAllWindows()
         if use_esp and esp_controller:
             esp_controller.shutdown()
 
@@ -94,7 +89,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Lane and Object Detection System")
     parser.add_argument('--video', type=str, help="Path to video file (overrides camera)", default=None)
     parser.add_argument('--use-esp', action='store_true', help="Enable ESP controller for sending commands")
-    parser.add_argument('--debug', action='store_true', help="Enable debug mode with drawing and display")
     args = parser.parse_args()
 
     source = args.video if args.video else find_available_camera()
@@ -102,4 +96,4 @@ if __name__ == "__main__":
         print("No available camera found.")
         exit(1)
 
-    main(source, use_esp=args.use_esp, debug=args.debug)
+    main(source, use_esp=args.use_esp)

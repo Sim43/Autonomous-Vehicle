@@ -8,7 +8,7 @@ void setup() {
   Serial.begin(115200);
   brakeServo.attach(servoPin);
   brakeServo.write(0);  // Start with brake released
-  Serial.println("Brake control ready. Send 1 (brake) or 0 (release)");
+  Serial.println("BRAKE_MODULE");
 }
 
 void loop() {

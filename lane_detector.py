@@ -211,7 +211,7 @@ class LaneDetector:
         
         return round(distance*xm_per_pix, 5)
     
-    def process_image(self, img, debug):
+    def process_image(self, img):
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         undist = self.distort_correct(img)
         # Get binary image
@@ -232,9 +232,7 @@ class LaneDetector:
         self.left_fit_prev = left_fit
         self.right_fit_prev = right_fit
         
-        if debug:
-            # Draw polygon
-            processed_frame = self.lane_fill_poly(birdseye, undist, left_fit, right_fit)
+        processed_frame = self.lane_fill_poly(birdseye, undist, left_fit, right_fit)
         
         # Update measurements periodically
         if self.frame_count == 0 or self.frame_count % 15 == 0:
@@ -242,7 +240,4 @@ class LaneDetector:
         
         self.frame_count += 1
         # Convert back to BGR for OpenCV compatibility
-        if debug:
-            return cv2.cvtColor(processed_frame, cv2.COLOR_RGB2BGR), self.offset
-        else: 
-            return self.offset
+        return cv2.cvtColor(processed_frame, cv2.COLOR_RGB2BGR), self.offset

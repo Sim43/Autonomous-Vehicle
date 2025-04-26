@@ -2,13 +2,18 @@
 import serial
 import time
 
-ser = serial.Serial('/dev/ttyUSB1', 115200)  # Change COM port as needed
-time.sleep(2)  # Wait for connection
+ser = serial.Serial('/dev/ttyUSB1', 115200, timeout=1)  # Adjust COM port if needed
+time.sleep(2)  # Give some time for ESP32 to reset
 
-angles = [1800, -1800, 0]
-for angle in angles:
-    print(f"Sending angle: {angle}")
-    ser.write(f"{angle}\n".encode())
-    time.sleep(1)  # Wait for action
+try:
+    while True:
+        cmd = input("Enter steering angle (e.g., 1800, -1800, 0): ").strip()
+        try:
+            angle = int(cmd)  # Try to convert to integer
+            ser.write(f"{angle}\n".encode())
+        except ValueError:
+            print("Invalid input. Enter a valid integer angle.")
 
-ser.close()
+except KeyboardInterrupt:
+    print("\nExiting...")
+    ser.close()
