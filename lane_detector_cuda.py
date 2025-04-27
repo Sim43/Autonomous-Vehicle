@@ -20,6 +20,11 @@ class LaneDetector:
         # Perspective matrices
         self.perspective_transform, self.inverse_perspective_transform = self._compute_perspective()
 
+        # Pre-create filters
+        self.gaussian_filter = cv2.cuda.createGaussianFilter(cv2.CV_8UC3, cv2.CV_8UC3, (3, 3), 0)
+        self.sobel_filter_x = cv2.cuda.createSobelFilter(cv2.CV_8UC1, cv2.CV_32F, 1, 0, ksize=3)
+        self.sobel_filter_y = cv2.cuda.createSobelFilter(cv2.CV_8UC1, cv2.CV_32F, 0, 1, ksize=3)
+
     def _compute_perspective(self):
         x, y = self.camera_img_size
         src = np.float32([
@@ -40,38 +45,34 @@ class LaneDetector:
         img_size = (img.shape[1], img.shape[0])
         assert img_size == self.camera_img_size, 'image size mismatch'
         return cv2.undistort(img, self.mtx, self.dist, None, self.mtx)
-    
-    def sobel_operations(self, gray_gpu, sobel_kernel=3):
-        sobel_filter_x = cv2.cuda.createSobelFilter(cv2.CV_8UC1, cv2.CV_32F, 1, 0, ksize=sobel_kernel)
-        sobel_filter_y = cv2.cuda.createSobelFilter(cv2.CV_8UC1, cv2.CV_32F, 0, 1, ksize=sobel_kernel)
-        
-        sobelx = sobel_filter_x.apply(gray_gpu)
-        sobely = sobel_filter_y.apply(gray_gpu)
-        
+
+    def sobel_operations(self, gray_gpu):
+        sobelx = self.sobel_filter_x.apply(gray_gpu)
+        sobely = self.sobel_filter_y.apply(gray_gpu)
         return sobelx, sobely
     
-    def abs_sobel_thresh(self, sobel, thresh=(0, 255)):
-        sobel_abs = cv2.cuda.abs(sobel)
-        sobel_abs = sobel_abs.download()
+    def abs_sobel_thresh(self, sobel_gpu, thresh=(0, 255)):
+        sobel_abs_gpu = cv2.cuda.abs(sobel_gpu)
+        sobel_abs = sobel_abs_gpu.download()
         scaled_sobel = np.uint8(255 * sobel_abs / np.max(sobel_abs))
         binary_output = np.zeros_like(scaled_sobel)
         binary_output[(scaled_sobel >= thresh[0]) & (scaled_sobel <= thresh[1])] = 1
         return binary_output
     
-    def mag_threshold(self, sobelx, sobely, thresh=(0, 255)):
-        sobelx_ = sobelx.download()
-        sobely_ = sobely.download()
-        mag = np.sqrt(sobelx_**2 + sobely_**2)
+    def mag_threshold(self, sobelx_gpu, sobely_gpu, thresh=(0, 255)):
+        sobelx = sobelx_gpu.download()
+        sobely = sobely_gpu.download()
+        mag = np.sqrt(sobelx**2 + sobely**2)
         scale = np.max(mag)/255 if np.max(mag) > 0 else 1
         mag_scaled = (mag/scale).astype(np.uint8)
         binary_output = np.zeros_like(mag_scaled)
         binary_output[(mag_scaled >= thresh[0]) & (mag_scaled <= thresh[1])] = 1
         return binary_output
     
-    def dir_threshold(self, sobelx, sobely, thresh=(0, np.pi/2)):
-        sobelx_ = sobelx.download()
-        sobely_ = sobely.download()
-        abs_grad_dir = np.arctan2(np.abs(sobely_), np.abs(sobelx_))
+    def dir_threshold(self, sobelx_gpu, sobely_gpu, thresh=(0, np.pi/2)):
+        sobelx = sobelx_gpu.download()
+        sobely = sobely_gpu.download()
+        abs_grad_dir = np.arctan2(np.abs(sobely), np.abs(sobelx))
         binary_output = np.zeros_like(abs_grad_dir)
         binary_output[(abs_grad_dir >= thresh[0]) & (abs_grad_dir <= thresh[1])] = 1
         return binary_output
@@ -79,10 +80,10 @@ class LaneDetector:
     def hls_select(self, img_gpu, sthresh=(0, 255), lthresh=(0, 255)):
         hls_gpu = cv2.cuda.cvtColor(img_gpu, cv2.COLOR_RGB2HLS)
         hls = hls_gpu.download()
-        l_channel = hls[:,:,1]
-        s_channel = hls[:,:,2]
+        l_channel = hls[:, :, 1]
+        s_channel = hls[:, :, 2]
         binary_output = np.zeros_like(s_channel)
-        binary_output[(s_channel >= sthresh[0]) & (s_channel <= sthresh[1]) & 
+        binary_output[(s_channel >= sthresh[0]) & (s_channel <= sthresh[1]) &
                       (l_channel >= lthresh[0]) & (l_channel <= lthresh[1])] = 1
         return binary_output
 
@@ -90,9 +91,7 @@ class LaneDetector:
         img_gpu = cv2.cuda_GpuMat()
         img_gpu.upload(img)
 
-        # Create filter only once if you want more optimization, but here we create inside function
-        gaussian_filter = cv2.cuda.createGaussianFilter(cv2.CV_8UC3, cv2.CV_8UC3, (3, 3), 0)
-        img_blur_gpu = gaussian_filter.apply(img_gpu)
+        img_blur_gpu = self.gaussian_filter.apply(img_gpu)
         gray_gpu = cv2.cuda.cvtColor(img_blur_gpu, cv2.COLOR_RGB2GRAY)
 
         sobelx, sobely = self.sobel_operations(gray_gpu)
@@ -103,9 +102,16 @@ class LaneDetector:
         mag_binary = self.mag_threshold(sobelx, sobely, thresh=(30, 100))
         dir_binary = self.dir_threshold(sobelx, sobely, thresh=(0.8, 1.2))
 
+        # Combine using GPU
+        s_binary_gpu = cv2.cuda_GpuMat()
+        combined_gpu = cv2.cuda_GpuMat()
+        s_binary_gpu.upload(s_binary)
         combined = np.zeros_like(s_binary)
         combined[((x_binary == 1) & (y_binary == 1)) | ((mag_binary == 1) & (dir_binary == 1))] = 1
-        final_binary = cv2.bitwise_or(s_binary, combined)
+        combined_gpu.upload(combined)
+
+        final_binary_gpu = cv2.cuda.bitwise_or(s_binary_gpu, combined_gpu)
+        final_binary = final_binary_gpu.download()
 
         return final_binary
     
@@ -116,8 +122,7 @@ class LaneDetector:
         return warped_gpu.download(), self.inverse_perspective_transform
 
     def track_lanes_initialize(self, binary_warped):
-        # same
-        histogram = np.sum(binary_warped[binary_warped.shape[0]//2:,:], axis=0)
+        histogram = np.sum(binary_warped[binary_warped.shape[0]//2:, :], axis=0)
         midpoint = histogram.shape[0] // 2
         leftx_base = np.argmax(histogram[:midpoint])
         rightx_base = np.argmax(histogram[midpoint:]) + midpoint
