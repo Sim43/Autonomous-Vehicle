@@ -2,7 +2,7 @@
 import serial
 import time
 
-ser = serial.Serial('/dev/ttyUSB3', 115200, timeout=1)
+ser = serial.Serial('/dev/ttyUSB2', 115200, timeout=1)
 time.sleep(2)  # Give some time for ESP32 to reset
 
 try:

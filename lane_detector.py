@@ -17,102 +17,85 @@ class LaneDetector:
         self.mtx = self.camera['mtx']
         self.dist = self.camera['dist']
         self.camera_img_size = self.camera['imagesize']
-        
-    def distort_correct(self, img):
-        img_size = (img.shape[1], img.shape[0])
-        assert (img_size == self.camera_img_size), 'image size is not compatible'
-        undist = cv2.undistort(img, self.mtx, self.dist, None, self.mtx)
-        return undist
-    
-    def abs_sobel_thresh(self, img, orient='x', thresh=(0, 255)):
-        gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-        if orient == 'x':
-            abs_sobel = np.absolute(cv2.Sobel(gray, cv2.CV_64F, 1, 0))
-        if orient == 'y':
-            abs_sobel = np.absolute(cv2.Sobel(gray, cv2.CV_64F, 0, 1))
-        scaled_sobel = np.uint8(255*abs_sobel/np.max(abs_sobel))
-        binary_output = np.zeros_like(scaled_sobel)
-        binary_output[(scaled_sobel >= thresh[0]) & (scaled_sobel <= thresh[1])] = 1
-        return binary_output
-    
-    def mag_threshold(self, img, sobel_kernel=3, thresh=(0, 255)):
-        gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-        x = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=sobel_kernel)
-        y = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=sobel_kernel)
-        mag = np.sqrt(x**2 + y**2)
-        scale = np.max(mag)/255
-        eightbit = (mag/scale).astype(np.uint8)
-        binary_output = np.zeros_like(eightbit)
-        binary_output[(eightbit > thresh[0]) & (eightbit < thresh[1])] = 1
-        return binary_output
-    
-    def dir_threshold(self, img, sobel_kernel=3, thresh=(0, np.pi/2)):
-        gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-        x = np.absolute(cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=sobel_kernel))
-        y = np.absolute(cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=sobel_kernel))
-        direction = np.arctan2(y, x)
-        binary_output = np.zeros_like(direction)
-        binary_output[(direction > thresh[0]) & (direction < thresh[1])] = 1
-        return binary_output
-    
-    def hls_select(self, img, sthresh=(0, 255), lthresh=()):
-        hls_img = cv2.cvtColor(img, cv2.COLOR_RGB2HLS)
-        L = hls_img[:,:,1]
-        S = hls_img[:,:,2]
-        binary_output = np.zeros_like(S)
-        binary_output[(S >= sthresh[0]) & (S <= sthresh[1]) & (L > lthresh[0]) & (L <= lthresh[1])] = 1
-        return binary_output
-    
-    def binary_pipeline(self, img):
-        img_copy = cv2.GaussianBlur(img, (3, 3), 0)
-        s_binary = self.hls_select(img_copy, sthresh=(140, 255), lthresh=(120, 255))
-        x_binary = self.abs_sobel_thresh(img_copy, thresh=(25, 200))
-        y_binary = self.abs_sobel_thresh(img_copy, thresh=(25, 200), orient='y')
-        xy = cv2.bitwise_and(x_binary, y_binary)
-        mag_binary = self.mag_threshold(img_copy, sobel_kernel=3, thresh=(30,100))
-        dir_binary = self.dir_threshold(img_copy, sobel_kernel=3, thresh=(0.8, 1.2))
-        gradient = np.zeros_like(s_binary)
-        gradient[((x_binary == 1) & (y_binary == 1)) | ((mag_binary == 1) & (dir_binary == 1))] = 1
-        final_binary = cv2.bitwise_or(s_binary, gradient)
-        return final_binary
-    
-    def warp_image(self, img):
-        image_size = (img.shape[1], img.shape[0])
-        x = img.shape[1]
-        y = img.shape[0]
-        
-        source_points = np.float32([
+
+        # Perspective matrices precomputed for speed
+        self.perspective_transform, self.inverse_perspective_transform = self._compute_perspective()
+
+    def _compute_perspective(self):
+        x, y = self.camera_img_size
+        src = np.float32([
             [0.117 * x, y],
             [(0.5 * x) - (x*0.078), (2/3)*y],
             [(0.5 * x) + (x*0.078), (2/3)*y],
             [x - (0.117 * x), y]
         ])
-        
-        destination_points = np.float32([
+        dst = np.float32([
             [0.25 * x, y],
             [0.25 * x, 0],
-            [x - (0.25 * x), 0],
-            [x - (0.25 * x), y]
+            [x - 0.25 * x, 0],
+            [x - 0.25 * x, y]
         ])
-        
-        perspective_transform = cv2.getPerspectiveTransform(source_points, destination_points)
-        inverse_perspective_transform = cv2.getPerspectiveTransform(destination_points, source_points)
-        warped_img = cv2.warpPerspective(img, perspective_transform, image_size, flags=cv2.INTER_LINEAR)
-        
-        return warped_img, inverse_perspective_transform
+        return cv2.getPerspectiveTransform(src, dst), cv2.getPerspectiveTransform(dst, src)
     
-    def has_lanes(self, binary_warped, threshold=0.01):
-        """Check if there are potential lane lines in the image by analyzing the bottom half"""
-        # Analyze the bottom half of the image where lanes are most likely to be
-        bottom_half = binary_warped[binary_warped.shape[0]//2:, :]
+    def sobel_operations(self, gray, sobel_kernel=3):
+        sobelx = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=sobel_kernel)
+        sobely = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=sobel_kernel)
+        return sobelx, sobely
         
-        # Calculate the percentage of white pixels
-        white_pixels = np.sum(bottom_half == 1)
-        total_pixels = bottom_half.shape[0] * bottom_half.shape[1]
-        white_ratio = white_pixels / total_pixels
+    def distort_correct(self, img):
+        img_size = (img.shape[1], img.shape[0])
+        assert img_size == self.camera_img_size, 'image size mismatch'
+        return cv2.undistort(img, self.mtx, self.dist, None, self.mtx)
+    
+    def abs_sobel_thresh(self, sobelx, sobely, orient='x', thresh=(0, 255)):
+        abs_sobel = np.absolute(sobelx if orient == 'x' else sobely)
+        scaled_sobel = np.uint8(255 * abs_sobel / np.max(abs_sobel))
+        binary_output = np.zeros_like(scaled_sobel)
+        binary_output[(scaled_sobel >= thresh[0]) & (scaled_sobel <= thresh[1])] = 1
+        return binary_output
+    
+    def mag_threshold(self, sobelx, sobely, thresh=(0, 255)):
+        mag = np.sqrt(sobelx**2 + sobely**2)
+        scale = np.max(mag)/255 if np.max(mag) > 0 else 1
+        mag_scaled = (mag/scale).astype(np.uint8)
+        binary_output = np.zeros_like(mag_scaled)
+        binary_output[(mag_scaled >= thresh[0]) & (mag_scaled <= thresh[1])] = 1
+        return binary_output
+    
+    def dir_threshold(self, sobelx, sobely, thresh=(0, np.pi/2)):
+        abs_grad_dir = np.arctan2(np.absolute(sobely), np.absolute(sobelx))
+        binary_output = np.zeros_like(abs_grad_dir)
+        binary_output[(abs_grad_dir >= thresh[0]) & (abs_grad_dir <= thresh[1])] = 1
+        return binary_output
+    
+    def hls_select(self, img, sthresh=(0, 255), lthresh=(0, 255)):
+        hls = cv2.cvtColor(img, cv2.COLOR_RGB2HLS)
+        l_channel = hls[:,:,1]
+        s_channel = hls[:,:,2]
+        binary_output = np.zeros_like(s_channel)
+        binary_output[(s_channel >= sthresh[0]) & (s_channel <= sthresh[1]) & (l_channel >= lthresh[0]) & (l_channel <= lthresh[1])] = 1
+        return binary_output
+    
+    def binary_pipeline(self, img):
+        img_blur = cv2.GaussianBlur(img, (3, 3), 0)
+        gray = cv2.cvtColor(img_blur, cv2.COLOR_RGB2GRAY)
+        sobelx, sobely = self.sobel_operations(gray)
+
+        s_binary = self.hls_select(img_blur, sthresh=(140, 255), lthresh=(120, 255))
+        x_binary = self.abs_sobel_thresh(sobelx, sobely, orient='x', thresh=(25, 200))
+        y_binary = self.abs_sobel_thresh(sobelx, sobely, orient='y', thresh=(25, 200))
+        mag_binary = self.mag_threshold(sobelx, sobely, thresh=(30, 100))
+        dir_binary = self.dir_threshold(sobelx, sobely, thresh=(0.8, 1.2))
         
-        # If the ratio is too low, there are probably no lanes
-        return white_ratio > threshold
+        combined = np.zeros_like(s_binary)
+        combined[((x_binary == 1) & (y_binary == 1)) | ((mag_binary == 1) & (dir_binary == 1))] = 1
+        
+        final_binary = cv2.bitwise_or(s_binary, combined)
+        return final_binary
+    
+    def warp_image(self, img):
+        img_size = (img.shape[1], img.shape[0])
+        return cv2.warpPerspective(img, self.perspective_transform, img_size), self.inverse_perspective_transform
     
     def track_lanes_initialize(self, binary_warped):
         histogram = np.sum(binary_warped[int(binary_warped.shape[0]/2):,:], axis=0)
@@ -212,25 +195,6 @@ class LaneDetector:
         result = cv2.addWeighted(undist, 1, newwarp, 0.3, 0)
         return result
     
-    def measure_curve(self, binary_warped, left_fit, right_fit):
-        ploty = np.linspace(0, binary_warped.shape[0]-1, binary_warped.shape[0])
-        y_eval = np.max(ploty)
-        
-        ym_per_pix = 30/720
-        xm_per_pix = 3.7/700
-        
-        leftx = self.get_val(ploty, left_fit)
-        rightx = self.get_val(ploty, right_fit)
-        
-        left_fit_cr = np.polyfit(ploty*ym_per_pix, leftx*xm_per_pix, 2)
-        right_fit_cr = np.polyfit(ploty*ym_per_pix, rightx*xm_per_pix, 2)
-        
-        left_curverad = ((1 + (2*left_fit_cr[0]*y_eval*ym_per_pix + left_fit_cr[1])**2)**1.5) / np.absolute(2*left_fit_cr[0])
-        right_curverad = ((1 + (2*right_fit_cr[0]*y_eval*ym_per_pix + right_fit_cr[1])**2)**1.5) / np.absolute(2*right_fit_cr[0])
-        
-        curve_rad = round((left_curverad + right_curverad)/2)
-        return curve_rad
-    
     def vehicle_offset(self, img, left_fit, right_fit):
         xm_per_pix = 3.7/700
         image_center = img.shape[1]/2
@@ -246,49 +210,19 @@ class LaneDetector:
     def process_image(self, img):
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         undist = self.distort_correct(img)
-        
-        # Get binary image
         binary_img = self.binary_pipeline(undist)
-        
-        # Perspective transform
-        birdseye, self.inverse_perspective_transform = self.warp_image(binary_img)
-        
-        # Check if lanes are present before processing
-        if not self.has_lanes(birdseye):
-            # No lanes detected, return original image with warning
-            font = cv2.FONT_HERSHEY_TRIPLEX
-            undist = cv2.putText(undist, 'No lanes detected', (30, 40), font, 1, (0,0,255), 2)
-            return cv2.cvtColor(undist, cv2.COLOR_RGB2BGR), 0, 0
-        
-        # Proceed with lane detection if lanes are present
-        if self.window_search:
-            self.window_search = False
-            left_fit, right_fit = self.track_lanes_initialize(birdseye)
-            self.left_fit_prev = left_fit
-            self.right_fit_prev = right_fit
-        else:
-            left_fit = self.left_fit_prev
-            right_fit = self.right_fit_prev
-            left_fit, right_fit, _, _, _, _ = self.track_lanes_update(birdseye, left_fit, right_fit)
-        
-        self.left_fit_prev = left_fit
-        self.right_fit_prev = right_fit
-        
-        # Draw polygon
-        processed_frame = self.lane_fill_poly(birdseye, undist, left_fit, right_fit)
+        birdseye, _ = self.warp_image(binary_img)
 
-        # Update measurements periodically
-        if self.frame_count == 0 or self.frame_count % 15 == 0:
-            self.curve_radius = self.measure_curve(birdseye, left_fit, right_fit)
-            self.offset = self.vehicle_offset(undist, left_fit, right_fit)
-        
-        # Add text to frame
-        font = cv2.FONT_HERSHEY_TRIPLEX
-        processed_frame = cv2.putText(processed_frame, f'Radius: {self.curve_radius} m', 
-                                     (30, 40), font, 1, (0,255,0), 2)
-        processed_frame = cv2.putText(processed_frame, f'Offset: {self.offset} m', 
-                                     (30, 80), font, 1, (0,255,0), 2)
-        
+        if self.window_search:
+            self.left_fit_prev, self.right_fit_prev = self.track_lanes_initialize(birdseye)
+            self.window_search = False
+        else:
+            self.left_fit_prev, self.right_fit_prev, _, _, _, _ = self.track_lanes_update(birdseye, self.left_fit_prev, self.right_fit_prev)
+
+        processed = self.lane_fill_poly(birdseye, undist, self.left_fit_prev, self.right_fit_prev)
+
+        if self.frame_count % 15 == 0:
+            self.offset = self.vehicle_offset(undist, self.left_fit_prev, self.right_fit_prev)
+
         self.frame_count += 1
-        # Convert back to BGR for OpenCV compatibility
-        return cv2.cvtColor(processed_frame, cv2.COLOR_RGB2BGR), self.curve_radius, self.offset
+        return cv2.cvtColor(processed, cv2.COLOR_RGB2BGR), self.offset

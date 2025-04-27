@@ -7,30 +7,30 @@ logging.getLogger('ultralytics').setLevel(logging.CRITICAL)
 
 class ObjectDetector:
     def __init__(self):
-        # Automatically select GPU if available
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         print(f"[INFO] Using device: {self.device.upper()}")
 
         self.model = YOLO('models/yolov8n.pt')
+        self.class_name_to_id = {'car': 2, 'person': 0, 'stop sign': 11}
         self.model.to(self.device)
-        self.classes_of_interest = ['car', 'person', 'stop sign']
-    
+
+        self.ref_sizes = {'car': 2.0, 'person': 0.5, 'stop sign': 0.6}
+
     def detect_objects(self, frame):
-        results = self.model(frame, device=self.device)
+        class_ids = list(self.class_name_to_id.values())
+        results = self.model.predict(frame, device=self.device, classes=class_ids, verbose=False)[0]
+
         detections = []
-        
-        for result in results:
-            for box in result.boxes:
-                x1, y1, x2, y2 = map(int, box.xyxy[0])
-                cls = self.model.names[int(box.cls[0])]
-                if cls in self.classes_of_interest and box.conf[0] >= 0.5:
-                    detections.append({
-                        'class': cls,
-                        'bbox': (x1, y1, x2, y2),
-                        'distance': self._estimate_distance(x2-x1, cls)
-                    })
+        for box in results.boxes:
+            x1, y1, x2, y2 = map(int, box.xyxy[0])
+            cls_id = int(box.cls[0])
+            class_name = self.model.names[cls_id]
+            if class_name in self.ref_sizes:
+                width = x2 - x1
+                distance = (self.ref_sizes[class_name] * 1000) / width
+                detections.append({
+                    'class': class_name,
+                    'bbox': (x1, y1, x2, y2),
+                    'distance': distance
+                })
         return detections
-    
-    def _estimate_distance(self, width, obj_class):
-        ref_sizes = {'car': 2.0, 'person': 0.5, 'stop sign': 0.6}
-        return (ref_sizes.get(obj_class, 2.0) * 1000) / width
