@@ -97,28 +97,48 @@ class LaneDetector:
         img_gpu.upload(img)
 
         img_blur_gpu = self.gaussian_filter.apply(img_gpu)
-        gray_gpu = cv2.cuda.cvtColor(img_blur_gpu, cv2.COLOR_RGB2GRAY)
 
-        sobelx, sobely = self.sobel_operations(gray_gpu)
+        # Create multiple CUDA streams
+        stream1 = cv2.cuda.Stream()
+        stream2 = cv2.cuda.Stream()
+        stream3 = cv2.cuda.Stream()
+        stream4 = cv2.cuda.Stream()
+        stream5 = cv2.cuda.Stream()
 
-        s_binary = self.hls_select(img_blur_gpu, sthresh=(140, 255), lthresh=(120, 255))
-        x_binary = self.abs_sobel_thresh(sobelx, thresh=(25, 200))
-        y_binary = self.abs_sobel_thresh(sobely, thresh=(25, 200))
-        mag_binary = self.mag_threshold(sobelx, sobely, thresh=(30, 100))
-        dir_binary = self.dir_threshold(sobelx, sobely, thresh=(0.8, 1.2))
+        # Launch operations in parallel streams
+        gray_gpu = cv2.cuda.cvtColor(img_blur_gpu, cv2.COLOR_RGB2GRAY, stream=stream1)
 
-        # Combine using GPU
+        sobelx = self.sobel_filter_x.apply(gray_gpu, stream=stream2)
+        sobely = self.sobel_filter_y.apply(gray_gpu, stream=stream3)
+        
+        hls_gpu = cv2.cuda.cvtColor(img_blur_gpu, cv2.COLOR_RGB2HLS, stream=stream4)
+
+        # Wait for operations to finish
+        stream1.waitForCompletion()
+        stream2.waitForCompletion()
+        stream3.waitForCompletion()
+        stream4.waitForCompletion()
+
+        # Continue after synchronization
+        s_binary = self.hls_select(hls_gpu.download(), sthresh=(140, 255), lthresh=(120, 255))
+        x_binary = self.abs_sobel_thresh(sobelx)
+        y_binary = self.abs_sobel_thresh(sobely)
+        mag_binary = self.mag_threshold(sobelx, sobely)
+        dir_binary = self.dir_threshold(sobelx, sobely)
+
+        combined = np.zeros_like(s_binary)
+        combined[((x_binary == 1) & (y_binary == 1)) | ((mag_binary == 1) & (dir_binary == 1))] = 1
+
         s_binary_gpu = cv2.cuda_GpuMat()
         combined_gpu = cv2.cuda_GpuMat()
         s_binary_gpu.upload(s_binary)
-        combined = np.zeros_like(s_binary)
-        combined[((x_binary == 1) & (y_binary == 1)) | ((mag_binary == 1) & (dir_binary == 1))] = 1
         combined_gpu.upload(combined)
 
         final_binary_gpu = cv2.cuda.bitwise_or(s_binary_gpu, combined_gpu)
         final_binary = final_binary_gpu.download()
 
         return final_binary
+
     
     def warp_image(self, img):
         img_gpu = cv2.cuda_GpuMat()
