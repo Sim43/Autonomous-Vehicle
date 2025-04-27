@@ -4,6 +4,11 @@ import pickle
 
 class LaneDetector:
     def __init__(self):
+        if cv2.cuda.getCudaEnabledDeviceCount() > 0:
+            print("CUDA is available. Device Name:", cv2.cuda.getDevice())
+        else:
+            print("CUDA is not available in OpenCV.")
+
         self.window_search = True
         self.frame_count = 0
         self.left_fit_prev = None
