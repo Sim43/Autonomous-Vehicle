@@ -42,8 +42,12 @@ class LaneDetector:
         return cv2.undistort(img, self.mtx, self.dist, None, self.mtx)
     
     def sobel_operations(self, gray_gpu, sobel_kernel=3):
-        sobelx = cv2.cuda.Sobel(gray_gpu, cv2.CV_64F, 1, 0, ksize=sobel_kernel)
-        sobely = cv2.cuda.Sobel(gray_gpu, cv2.CV_64F, 0, 1, ksize=sobel_kernel)
+        sobel_filter_x = cv2.cuda.createSobelFilter(cv2.CV_8UC1, cv2.CV_32F, 1, 0, ksize=sobel_kernel)
+        sobel_filter_y = cv2.cuda.createSobelFilter(cv2.CV_8UC1, cv2.CV_32F, 0, 1, ksize=sobel_kernel)
+        
+        sobelx = sobel_filter_x.apply(gray_gpu)
+        sobely = sobel_filter_y.apply(gray_gpu)
+        
         return sobelx, sobely
     
     def abs_sobel_thresh(self, sobel, thresh=(0, 255)):
@@ -86,7 +90,9 @@ class LaneDetector:
         img_gpu = cv2.cuda_GpuMat()
         img_gpu.upload(img)
 
-        img_blur_gpu = cv2.cuda.GaussianBlur(img_gpu, (3,3), 0)
+        # Create filter only once if you want more optimization, but here we create inside function
+        gaussian_filter = cv2.cuda.createGaussianFilter(cv2.CV_8UC3, cv2.CV_8UC3, (3, 3), 0)
+        img_blur_gpu = gaussian_filter.apply(img_gpu)
         gray_gpu = cv2.cuda.cvtColor(img_blur_gpu, cv2.COLOR_RGB2GRAY)
 
         sobelx, sobely = self.sobel_operations(gray_gpu)
