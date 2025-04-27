@@ -1,12 +1,11 @@
+import numpy as np
 import cv2
 import pickle
-import numpy as np
-import cupy as cp  # <--- added cupy
 
 class LaneDetector:
     def __init__(self):
         if cv2.cuda.getCudaEnabledDeviceCount() > 0:
-            print("CUDA is available. Device ID:", cv2.cuda.getDevice())
+            print("CUDA is available. Device Name:", cv2.cuda.getDevice())
         else:
             print("CUDA is not available in OpenCV.")
 
@@ -59,29 +58,29 @@ class LaneDetector:
     
     def abs_sobel_thresh(self, sobel_gpu, thresh=(0, 255)):
         sobel_abs_gpu = cv2.cuda.abs(sobel_gpu)
-        sobel_abs = cp.asarray(sobel_abs_gpu.download())
-        scaled_sobel = cp.uint8(255 * sobel_abs / cp.max(sobel_abs))
-        binary_output = cp.zeros_like(scaled_sobel)
+        sobel_abs = sobel_abs_gpu.download()
+        scaled_sobel = np.uint8(255 * sobel_abs / np.max(sobel_abs))
+        binary_output = np.zeros_like(scaled_sobel)
         binary_output[(scaled_sobel >= thresh[0]) & (scaled_sobel <= thresh[1])] = 1
-        return cp.asnumpy(binary_output)
+        return binary_output
     
     def mag_threshold(self, sobelx_gpu, sobely_gpu, thresh=(0, 255)):
-        sobelx = cp.asarray(sobelx_gpu.download())
-        sobely = cp.asarray(sobely_gpu.download())
-        mag = cp.sqrt(sobelx**2 + sobely**2)
-        scale = cp.max(mag)/255 if cp.max(mag) > 0 else 1
-        mag_scaled = (mag/scale).astype(cp.uint8)
-        binary_output = cp.zeros_like(mag_scaled)
+        sobelx = sobelx_gpu.download()
+        sobely = sobely_gpu.download()
+        mag = np.sqrt(sobelx**2 + sobely**2)
+        scale = np.max(mag)/255 if np.max(mag) > 0 else 1
+        mag_scaled = (mag/scale).astype(np.uint8)
+        binary_output = np.zeros_like(mag_scaled)
         binary_output[(mag_scaled >= thresh[0]) & (mag_scaled <= thresh[1])] = 1
-        return cp.asnumpy(binary_output)
+        return binary_output
     
-    def dir_threshold(self, sobelx_gpu, sobely_gpu, thresh=(0, cp.pi/2)):
-        sobelx = cp.asarray(sobelx_gpu.download())
-        sobely = cp.asarray(sobely_gpu.download())
-        abs_grad_dir = cp.arctan2(cp.abs(sobely), cp.abs(sobelx))
-        binary_output = cp.zeros_like(abs_grad_dir)
+    def dir_threshold(self, sobelx_gpu, sobely_gpu, thresh=(0, np.pi/2)):
+        sobelx = sobelx_gpu.download()
+        sobely = sobely_gpu.download()
+        abs_grad_dir = np.arctan2(np.abs(sobely), np.abs(sobelx))
+        binary_output = np.zeros_like(abs_grad_dir)
         binary_output[(abs_grad_dir >= thresh[0]) & (abs_grad_dir <= thresh[1])] = 1
-        return cp.asnumpy(binary_output)
+        return binary_output
 
     def hls_select(self, img_gpu, sthresh=(0, 255), lthresh=(0, 255)):
         hls_gpu = cv2.cuda.cvtColor(img_gpu, cv2.COLOR_RGB2HLS)
@@ -108,6 +107,7 @@ class LaneDetector:
         mag_binary = self.mag_threshold(sobelx, sobely, thresh=(30, 100))
         dir_binary = self.dir_threshold(sobelx, sobely, thresh=(0.8, 1.2))
 
+        # Combine using GPU
         s_binary_gpu = cv2.cuda_GpuMat()
         combined_gpu = cv2.cuda_GpuMat()
         s_binary_gpu.upload(s_binary)
@@ -127,17 +127,16 @@ class LaneDetector:
         return warped_gpu.download(), self.inverse_perspective_transform
 
     def track_lanes_initialize(self, binary_warped):
-        histogram = cp.sum(cp.asarray(binary_warped[binary_warped.shape[0]//2:, :]), axis=0)
-        histogram = cp.asnumpy(histogram)
+        histogram = np.sum(binary_warped[binary_warped.shape[0]//2:, :], axis=0)
         midpoint = histogram.shape[0] // 2
         leftx_base = np.argmax(histogram[:midpoint])
         rightx_base = np.argmax(histogram[midpoint:]) + midpoint
         
         nwindows = 9
         window_height = binary_warped.shape[0] // nwindows
-        nonzero = cp.asarray(binary_warped).nonzero()
-        nonzeroy = cp.asnumpy(nonzero[0])
-        nonzerox = cp.asnumpy(nonzero[1])
+        nonzero = binary_warped.nonzero()
+        nonzeroy = np.array(nonzero[0])
+        nonzerox = np.array(nonzero[1])
         
         leftx_current = leftx_base
         rightx_current = rightx_base
@@ -184,9 +183,9 @@ class LaneDetector:
         if self.frame_count % 10 == 0:
             self.window_search = True
         
-        nonzero = cp.asarray(binary_warped).nonzero()
-        nonzeroy = cp.asnumpy(nonzero[0])
-        nonzerox = cp.asnumpy(nonzero[1])
+        nonzero = binary_warped.nonzero()
+        nonzeroy = np.array(nonzero[0])
+        nonzerox = np.array(nonzero[1])
         margin = 100
         
         left_lane_inds = ((nonzerox > (left_fit[0]*(nonzeroy**2) + left_fit[1]*nonzeroy + left_fit[2] - margin)) & 
