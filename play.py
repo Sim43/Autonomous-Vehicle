@@ -20,7 +20,7 @@ def draw_driving_info(frame, steering_angle, accel):
     return frame
 
 def find_available_camera(max_index=10):
-    for index in range(0, max_index):
+    for index in range(1, max_index):
         cap = cv2.VideoCapture(index)
         if cap.isOpened():
             cap.release()
