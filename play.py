@@ -52,8 +52,10 @@ def main(source, use_esp):
                 frame_with_lanes = frame
                 offset = 0
 
-            steering_angle = pid.compute(offset)
-            steering_angle = int(max(min(steering_angle, 1800), -1800))
+            # steering_angle = pid.compute(offset)
+            # steering_angle = int(max(min(steering_angle, 1000), -1000))
+
+            steering_angle = offset * 100
 
             if use_esp:
                 esp_controller.set_steering(steering_angle)
