@@ -3,8 +3,7 @@ const int motorPin = 23;  // PWM pin connected to motor
 
 void setup() {
   Serial.begin(115200);
-  pinMode(motorPin, OUTPUT); // Set motor pin as an output
-  Serial.println("ACCELERATION_MODULE");
+  pinMode(motorPin, OUTPUT); 
 }
 
 void loop() {
@@ -12,12 +11,15 @@ void loop() {
     char receivedChar = Serial.read(); // Read a single character
 
     if (receivedChar == '1') {
-      analogWrite(motorPin, 130); // Start motor at PWM 130
+      analogWrite(motorPin, 65); // Start motor at PWM 130
       Serial.println("Motor ON");
     } 
     else if (receivedChar == '0') {
       analogWrite(motorPin, 0); // Stop motor
       Serial.println("Motor OFF");
+    }
+    else if (receivedChar == 'f') {
+      Serial.println("ACCELERATION_MODULE");
     }
   }
 }

@@ -20,7 +20,7 @@ def draw_driving_info(frame, steering_angle, accel):
     return frame
 
 def find_available_camera(max_index=10):
-    for index in range(0, max_index):
+    for index in range(1, max_index):
         cap = cv2.VideoCapture(index)
         if cap.isOpened():
             cap.release()
@@ -52,8 +52,10 @@ def main(source, use_esp):
                 frame_with_lanes = frame
                 offset = 0
 
-            steering_angle = pid.compute(offset)
-            steering_angle = int(max(min(steering_angle, 1800), -1800))
+            # steering_angle = pid.compute(offset)
+            # steering_angle = int(max(min(steering_angle, 1000), -1000))
+
+            steering_angle = offset * 100
 
             if use_esp:
                 esp_controller.set_steering(steering_angle)

@@ -2,7 +2,7 @@
 import serial
 import time
 
-ser = serial.Serial('/dev/ttyUSB1', 115200, timeout=1)  # Adjust COM port if needed
+ser = serial.Serial('/tmp/steer', 115200, timeout=1)  # Adjust COM port if needed
 time.sleep(2)  # Give some time for ESP32 to reset
 
 try:
