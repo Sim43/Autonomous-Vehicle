@@ -13,7 +13,7 @@ class LaneDetector:
         self.offset = 0
         
         # Load camera calibration
-        self.camera = pickle.load(open("models/own_camera.pkl", "rb"))
+        self.camera = pickle.load(open("models/real_cam.pkl", "rb"))
         self.mtx = self.camera['mtx']
         self.dist = self.camera['dist']
         self.camera_img_size = self.camera['imagesize']
