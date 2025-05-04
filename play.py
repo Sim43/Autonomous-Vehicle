@@ -1,6 +1,10 @@
 import cv2
 import argparse
-from lane_detector import LaneDetector
+import sys 
+sys.path.append('lane_finder_v1')
+sys.path.append('lane_finder_v2')
+from lane_finder_v1.lane_detector import LaneDetector
+from lane_finder_v2.lane_finder import LaneFinder
 from obj_detector import ObjectDetector
 from controller import PIDController, ESPController
 
@@ -27,8 +31,11 @@ def find_available_camera(max_index=10):
             return index
     return None
 
-def main(source, use_esp):
-    lane_detector = LaneDetector()
+def main(source, use_esp, ldv):
+    if ldv == 1:
+        lane_detector = LaneDetector()
+    else: 
+        lane_detector = LaneFinder()
     object_detector = ObjectDetector()
     pid = PIDController(Kp=500, Ki=0.1, Kd=100)
     esp_controller = ESPController() if use_esp else None
@@ -46,7 +53,11 @@ def main(source, use_esp):
                 break
 
             try:
-                frame_with_lanes, offset = lane_detector.process_image(frame)
+                if ldv == 1: 
+                    frame_with_lanes, offset = lane_detector.process_image(frame)
+                else: 
+                    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                    frame_with_lanes, offset, found = lane_detector.process_image(frame_rgb, reset=False, show_period=0)
             except AssertionError as e:
                 print("Lane detection skipped:", e)
                 frame_with_lanes = frame
@@ -66,7 +77,7 @@ def main(source, use_esp):
             object_too_close = any(det['distance'] < 2.0 for det in detections)
 
             if use_esp:
-                if object_too_close:
+                if object_too_close or (ldv == 2 and not found):
                     accel = False
                     esp_controller.set_brake(True)
                     esp_controller.set_acceleration(False)
@@ -90,7 +101,8 @@ def main(source, use_esp):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Lane and Object Detection System")
     parser.add_argument('--video', type=str, help="Path to video file (overrides camera)", default=None)
-    parser.add_argument('--use-esp', action='store_true', help="Enable ESP controller for sending commands")
+    parser.add_argument('--esp', action='store_true', help="Enable ESP controller for sending commands")
+    parser.add_argument('--ldv', type=int , help="Use Lane version v1 or v2 (default v2)", default=2)
     args = parser.parse_args()
 
     source = args.video if args.video else find_available_camera()
@@ -98,4 +110,4 @@ if __name__ == "__main__":
         print("No available camera found.")
         exit(1)
 
-    main(source, use_esp=args.use_esp)
+    main(source, use_esp=args.esp, ldv=args.ldv)

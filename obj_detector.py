@@ -11,10 +11,10 @@ class ObjectDetector:
         print(f"[INFO] Using device: {self.device.upper()}")
 
         self.model = YOLO('models/yolov8n.pt')
-        self.class_name_to_id = {'car': 2, 'person': 0, 'stop sign': 11}
+        self.class_name_to_id = {'car': 2, 'person': 0, 'stop sign': 11, 'traffic light': 9}
         self.model.to(self.device)
 
-        self.ref_sizes = {'car': 2.0, 'person': 0.5, 'stop sign': 0.6}
+        self.ref_sizes = {'car': 2.0, 'person': 0.5, 'stop sign': 0.6, 'traffic light': 0.6}
 
     def detect_objects(self, frame):
         class_ids = list(self.class_name_to_id.values())
