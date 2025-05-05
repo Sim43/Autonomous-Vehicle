@@ -23,21 +23,13 @@ def draw_driving_info(frame, steering_angle, accel):
     cv2.putText(frame, text, org, cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 0), 2)
     return frame
 
-def find_available_camera(max_index=10):
-    for index in range(1, max_index):
-        cap = cv2.VideoCapture(index)
-        if cap.isOpened():
-            cap.release()
-            return index
-    return None
-
-def main(source, use_esp, ldv):
+def main(source, use_esp, ldv, reverse):
     if ldv == 1:
         lane_detector = LaneDetector()
     else: 
         lane_detector = LaneFinder()
     object_detector = ObjectDetector()
-    pid = PIDController(Kp=500, Ki=0.1, Kd=100)
+    # pid = PIDController(Kp=500, Ki=0.1, Kd=100)
     esp_controller = ESPController() if use_esp else None
 
     cap = cv2.VideoCapture(source)
@@ -63,10 +55,9 @@ def main(source, use_esp, ldv):
                 frame_with_lanes = frame
                 offset = 0
 
-            # steering_angle = pid.compute(offset)
-            # steering_angle = int(max(min(steering_angle, 1000), -1000))
-
             steering_angle = offset * 100
+            if reverse:
+                steering_angle *= -1
 
             if use_esp:
                 esp_controller.set_steering(steering_angle)
@@ -100,14 +91,14 @@ def main(source, use_esp, ldv):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Lane and Object Detection System")
-    parser.add_argument('--video', type=str, help="Path to video file (overrides camera)", default=None)
+    parser.add_argument('--video', type=str, help="Path to video file or camera index (e.g. 0, 1, etc.)", required=True)
     parser.add_argument('--esp', action='store_true', help="Enable ESP controller for sending commands")
-    parser.add_argument('--ldv', type=int , help="Use Lane version v1 or v2 (default v2)", default=2)
+    parser.add_argument('--ldv', type=int, help="Use Lane version v1 or v2 (default v2)", default=2)
+    parser.add_argument('--reverse', action='store_true', help="Reverse the steering angle direction")
+
     args = parser.parse_args()
 
-    source = args.video if args.video else find_available_camera()
-    if source is None:
-        print("No available camera found.")
-        exit(1)
+    # Convert to integer if camera index was passed
+    source = int(args.video) if args.video.isdigit() else args.video
 
-    main(source, use_esp=args.esp, ldv=args.ldv)
+    main(source, use_esp=args.esp, ldv=args.ldv, reverse=args.reverse)
