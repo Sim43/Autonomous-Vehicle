@@ -55,7 +55,7 @@ def main(source, use_esp, ldv, reverse):
                 frame_with_lanes = frame
                 offset = 0
 
-            steering_angle = offset * 100
+            steering_angle = offset * 200
             if reverse:
                 steering_angle *= -1
 
@@ -65,15 +65,15 @@ def main(source, use_esp, ldv, reverse):
             detections = object_detector.detect_objects(frame)
 
             accel = True
-            object_too_close = any(det['distance'] < 2.0 for det in detections)
+            object_too_close = any(det['distance'] < 3.0 for det in detections)
 
             if use_esp:
                 if object_too_close or (ldv == 2 and not found):
                     accel = False
                     esp_controller.set_brake(True)
-                    esp_controller.set_acceleration(False)
+                    esp_controller.set_acceleration(False, reverse)
                 else:
-                    esp_controller.set_acceleration(True)
+                    esp_controller.set_acceleration(True, reverse)
                     esp_controller.set_brake(False)
 
             frame_with_all = draw_detections(frame_with_lanes, detections)
