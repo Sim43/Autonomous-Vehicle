@@ -139,7 +139,7 @@ def main(source, use_esp, ldv, reverse):
                 offset = 0
                 found = False
 
-            steering_angle = offset * 200
+            steering_angle = offset * 300
             if reverse:
                 steering_angle *= -1
 
@@ -149,7 +149,7 @@ def main(source, use_esp, ldv, reverse):
             detections = object_detector.detect_objects(frame)
 
             accel = True
-            object_too_close = any(det['distance'] < 3.0 for det in detections) if detections else False
+            object_too_close = any(det['distance'] <= 4.0 for det in detections) if detections else False
 
             if use_esp:
                 if object_too_close or (ldv == 2 and not found):
