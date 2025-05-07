@@ -10,21 +10,28 @@ DEVICE_IDS = {
     "STEERING_MODULE": "steer"
 }
 
+# Maximum time to wait for a valid response
+MAX_READ_TIME = 2.0  # seconds
+
 def detect_devices():
     ports = glob.glob("/dev/ttyUSB*")
     detected = {}
 
     for port in ports:
         try:
-            with serial.Serial(port, 115200, timeout=1) as ser:
-                time.sleep(1)  # Give time to establish connection
+            with serial.Serial(port, 115200, timeout=0.5) as ser:
+                time.sleep(1)
                 ser.reset_input_buffer()
-                ser.write(b"f\n")  # Send ID query
-                response = ser.readline().decode('utf-8', errors='ignore').strip()
-                print(f"{port} -> '{response}'")
+                ser.write(b"f\n")
 
-                if response in DEVICE_IDS:
-                    detected[DEVICE_IDS[response]] = port
+                start_time = time.time()
+                while time.time() - start_time < MAX_READ_TIME:
+                    line = ser.readline().decode('utf-8', errors='ignore').strip()
+                    if line:
+                        print(f"{port} -> '{line}'")
+                        if line in DEVICE_IDS:
+                            detected[DEVICE_IDS[line]] = port
+                            break  # Found valid device, stop reading this port
         except Exception as e:
             print(f"Error on {port}: {e}")
 
