@@ -16,15 +16,27 @@ def detect_devices():
 
     for port in ports:
         try:
-            with serial.Serial(port, 115200, timeout=1) as ser:
+            with serial.Serial(port, 115200, timeout=0.5) as ser:
                 time.sleep(1)  # Give time to establish connection
                 ser.reset_input_buffer()
                 ser.write(b"f\n")  # Send ID query
-                response = ser.readline().decode('utf-8', errors='ignore').strip()
-                print(f"{port} -> '{response}'")
 
-                if response in DEVICE_IDS:
-                    detected[DEVICE_IDS[response]] = port
+                buffer = ""
+                start_time = time.time()
+                max_wait = 2.0  # seconds
+
+                while time.time() - start_time < max_wait:
+                    if ser.in_waiting:
+                        byte = ser.read().decode('utf-8', errors='ignore')
+                        if byte == '\n':
+                            response = buffer.strip()
+                            print(f"{port} -> '{response}'")
+                            if response in DEVICE_IDS:
+                                detected[DEVICE_IDS[response]] = port
+                            break
+                        else:
+                            buffer += byte
+
         except Exception as e:
             print(f"Error on {port}: {e}")
 

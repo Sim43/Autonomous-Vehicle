@@ -57,12 +57,13 @@ class ESPController:
                 except Exception as e:
                     print(f"Steering control error: {e}")
 
-    def set_acceleration(self, active):
+    def set_acceleration(self, active, reverse):
+        bit_to_send = b'2' if reverse else b'1'
         if active != self.accel_active:
             self.accel_active = active
             if self.accel_serial:
                 try:
-                    self.accel_serial.write(b'1' if active else b'0')
+                    self.accel_serial.write(bit_to_send if active else b'0')
                 except Exception as e:
                     print(f"Acceleration control error: {e}")
 
@@ -80,7 +81,7 @@ class ESPController:
         self.set_acceleration(False)
 
     def shutdown(self):
-        self.set_acceleration(False)
+        self.set_acceleration(False, False)
         self.set_brake(False)
         self.set_steering(0)
 
