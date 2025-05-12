@@ -1,3 +1,7 @@
+###############################################################################
+# Libraries
+###############################################################################
+
 import matplotlib.image as mpimg
 import matplotlib.pyplot as plt
 from ultralytics import YOLO
@@ -10,6 +14,11 @@ import torch
 import math
 import time
 import cv2
+
+
+###############################################################################
+# Misc
+###############################################################################
 
 # Suppress all YOLO-related logging
 logging.getLogger('ultralytics').setLevel(logging.CRITICAL)
