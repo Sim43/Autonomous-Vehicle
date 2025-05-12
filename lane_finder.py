@@ -4,10 +4,13 @@ import matplotlib.image as mpimg
 import cv2
 import os
 import numpy as np
-import settings
 import math
 import argparse
-from settings import CALIB_FILE_NAME, PERSPECTIVE_FILE_NAME
+
+
+CALIB_FILE_NAME, PERSPECTIVE_FILE_NAME = 'camera_pkls/calib.p', 'camera_pkls/maps.p'
+ORIGINAL_SIZE = 1280, 720
+UNWARPED_SIZE = 500, 600
 
 
 
@@ -165,8 +168,8 @@ class LaneFinder:
         pixels_per_meter = perspective_data['pixels_per_meter']
 
         self.found = False
-        self.img_size = settings.ORIGINAL_SIZE
-        self.warped_size = settings.UNWARPED_SIZE
+        self.img_size = ORIGINAL_SIZE
+        self.warped_size = UNWARPED_SIZE
         self.mask = np.zeros((self.warped_size[1], self.warped_size[0], 3), dtype=np.uint8)
         self.roi_mask = np.ones((self.warped_size[1], self.warped_size[0], 3), dtype=np.uint8)
         self.total_mask = np.zeros_like(self.roi_mask)
@@ -332,9 +335,6 @@ class LaneFinder:
 
         return cv2.cvtColor(lane_img, cv2.COLOR_RGB2BGR), -offset, self.found 
 
-
-
-import argparse
 
 def get_args():
     parser = argparse.ArgumentParser(description="Lane Detection from video or webcam.")
