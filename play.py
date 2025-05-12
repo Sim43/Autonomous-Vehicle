@@ -1,21 +1,28 @@
-import cv2
-import argparse
-from ultralytics import YOLO
-import torch
-import logging
-import serial
-import time
-import pickle
-import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
+import matplotlib.pyplot as plt
+from ultralytics import YOLO
 import numpy as np
+import argparse
+import logging
+import pickle
+import serial
+import torch
 import math
+import time
+import cv2
+
+# Suppress all YOLO-related logging
+logging.getLogger('ultralytics').setLevel(logging.CRITICAL)
 
 
 CALIB_FILE_NAME, PERSPECTIVE_FILE_NAME = 'camera_pkls/calib.p', 'camera_pkls/maps.p'
 ORIGINAL_SIZE = 1280, 720
 UNWARPED_SIZE = 500, 600
 
+
+###############################################################################
+# Utility Functions
+###############################################################################
 
 def get_center_shift(coeffs, img_size, pixels_per_meter):
     return np.polyval(coeffs, img_size[1]/pixels_per_meter[1]) - (img_size[0]//2)/pixels_per_meter[0]
@@ -26,6 +33,26 @@ def get_curvature(coeffs, img_size, pixels_per_meter):
         return float('inf')
     y_eval = img_size[1] / pixels_per_meter[1]
     return ((1 + (2 * coeffs[0] * y_eval + coeffs[1]) ** 2) ** 1.5) / denom
+
+def draw_detections(frame, detections):
+    for det in detections:
+        x1, y1, x2, y2 = det['bbox']
+        label = f"{det['class']} ({int(det['distance'])}m)"
+        cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 0), 2)
+        cv2.putText(frame, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+    return frame
+
+def draw_driving_info(frame, steering_angle, accel):
+    brake_or_accel = "Accel" if accel else "Brake"
+    text = f"Steering: {int(steering_angle)} | {brake_or_accel}"
+    org = (frame.shape[1] - 320, 40)
+    cv2.putText(frame, text, org, cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 0), 2)
+    return frame
+
+
+###############################################################################
+# LaneLineFinder Class
+###############################################################################
 
 class LaneLineFinder:
     def __init__(self, img_size, pixel_Per_Metter, center_shift):
@@ -156,6 +183,9 @@ class LaneLineFinder:
         cv2.polylines(self.other_line_mask, [points], 0, 1, thickness=int(5*window_width))
 
 
+###############################################################################
+# LaneFinder Class
+###############################################################################
 
 class LaneFinder:
     def __init__(self):
@@ -339,6 +369,10 @@ class LaneFinder:
         return cv2.cvtColor(lane_img, cv2.COLOR_RGB2BGR), -offset, self.found 
 
 
+###############################################################################
+# ESPController Class
+###############################################################################
+
 class ESPController:
     def __init__(self):
         self.accel_serial = None
@@ -398,10 +432,6 @@ class ESPController:
                 except Exception as e:
                     print(f"Brake control error: {e}")
 
-    def emergency_stop(self):
-        self.set_brake(True)
-        self.set_acceleration(False)
-
     def shutdown(self):
         self.set_acceleration(False, False)
         self.set_brake(False)
@@ -414,8 +444,10 @@ class ESPController:
         if self.brake_serial:
             self.brake_serial.close()
 
-# Suppress all YOLO-related logging
-logging.getLogger('ultralytics').setLevel(logging.CRITICAL)
+
+###############################################################################
+# ObjectDetector Class
+###############################################################################
 
 class ObjectDetector:
     def __init__(self):
@@ -448,20 +480,9 @@ class ObjectDetector:
         return detections
 
 
-def draw_detections(frame, detections):
-    for det in detections:
-        x1, y1, x2, y2 = det['bbox']
-        label = f"{det['class']} ({int(det['distance'])}m)"
-        cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 0), 2)
-        cv2.putText(frame, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
-    return frame
-
-def draw_driving_info(frame, steering_angle, accel):
-    brake_or_accel = "Accel" if accel else "Brake"
-    text = f"Steering: {int(steering_angle)} | {brake_or_accel}"
-    org = (frame.shape[1] - 320, 40)
-    cv2.putText(frame, text, org, cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 0), 2)
-    return frame
+###############################################################################
+# Main
+###############################################################################
 
 def main(source, use_esp, reverse):
     lane_detector = LaneFinder()
