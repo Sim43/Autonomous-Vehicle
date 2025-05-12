@@ -307,10 +307,6 @@ class LaneFinder:
             cv2.polylines(lanes, [line_l.astype(np.int32)], False, (255, 0, 0),thickness=6 )
             cv2.polylines(lanes, [line_r.astype(np.int32)],False,  (0, 0, 255), thickness=6)
             cv2.fillPoly(lanes, [both_lines.astype(np.int32)], (128,60,128))
-            mid_coef = 0.5 * (self.line_l.poly_coeffs + self.line_r.poly_coeffs)
-            curve = get_curvature(mid_coef, img_size=self.warped_size, pixels_per_meter=self.line_l.pixel_Per_Metter)
-            shift = get_center_shift(mid_coef, img_size=self.warped_size, pixels_per_meter=self.line_l.pixel_Per_Metter)
-
            
         else:
             warning_shape = self.warning_icon.shape
